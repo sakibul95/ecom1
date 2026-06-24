@@ -1,0 +1,843 @@
+{
+  "info": {
+    "name": "Boty API",
+    "_postman_id": "boty-api-collection-v1",
+    "description": "Complete API collection for the Boty e-commerce project.\n\n**Setup:**\n1. Set the `baseUrl` variable to your server URL (default: `http://localhost:3000`).\n2. Set `adminApiKey` to the value of `ADMIN_API_KEY` from your `.env.local`.\n3. Set `productId` to a slug that exists in your database for product/order tests.\n\n**Folders:**\n- Products — public endpoints\n- Orders — public order creation\n- Admin / Products — key-gated product upload\n- Admin / Orders — key-gated orders list",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",     "value": "http://localhost:3000", "type": "string" },
+    { "key": "adminApiKey", "value": "replace-me-with-openssl-rand-hex-32", "type": "string" },
+    { "key": "productId",   "value": "rose-face-serum", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Products",
+      "description": "Public product endpoints — no auth required.",
+      "item": [
+        {
+          "name": "GET all products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Returns all active products ordered by sort_order then created_at."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Body has data array', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('data');",
+                  "  pm.expect(json.data).to.be.an('array');",
+                  "});",
+                  "pm.test('Rate-limit headers present', () => {",
+                  "  pm.response.to.have.header('X-RateLimit-Limit');",
+                  "  pm.response.to.have.header('X-RateLimit-Remaining');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET all products — filtered by category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?category=serums",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [{ "key": "category", "value": "serums" }]
+            },
+            "description": "Returns only products in the 'serums' category."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All returned products match category', () => {",
+                  "  const json = pm.response.json();",
+                  "  json.data.forEach(p => pm.expect(p.category).to.equal('serums'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET product by ID — valid",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{productId}}"]
+            },
+            "description": "Returns full product detail for a given slug ID."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Body has data object with id', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data).to.have.property('id');",
+                  "  pm.expect(json.data).to.have.property('price');",
+                  "  pm.expect(json.data).to.have.property('description');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET product by ID — not found",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/this-does-not-exist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "this-does-not-exist"]
+            },
+            "description": "Expects a 404 for a slug that doesn't exist in the DB."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error message present', () => {",
+                  "  pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET product by ID — invalid slug format",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/INVALID ID!!",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "INVALID ID!!"]
+            },
+            "description": "Slug with uppercase / special characters should return 400."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error message about format', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('Invalid product ID format');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "description": "Public order creation endpoint.",
+      "item": [
+        {
+          "name": "POST create order — valid",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Fatema Khanam\",\n  \"phone\": \"01712345678\",\n  \"address\": \"123 Mirpur Road, Dhaka\",\n  \"email\": \"fatema@example.com\",\n  \"note\": \"Please call before delivery.\",\n  \"deliveryZone\": \"inside-dhaka\",\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Creates a new order. Server recomputes totals from DB price — client price is never trusted."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Returned order has expected fields', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.property('id');",
+                  "  pm.expect(d).to.have.property('total');",
+                  "  pm.expect(d).to.have.property('status');",
+                  "  pm.expect(d.status).to.equal('pending');",
+                  "  pm.expect(d.deliveryCharge).to.equal(50);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create order — outside Dhaka delivery zone",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rahim Uddin\",\n  \"phone\": \"01812345678\",\n  \"address\": \"45 College Road, Chittagong\",\n  \"deliveryZone\": \"outside-dhaka\",\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Verifies the outside-dhaka delivery charge (80 BDT) is applied."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Delivery charge is 80', () => {",
+                  "  pm.expect(pm.response.json().data.deliveryCharge).to.equal(80);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create order — outside district delivery zone",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Karim Ali\",\n  \"phone\": \"01912345678\",\n  \"address\": \"12 Village Road, Sylhet\",\n  \"deliveryZone\": \"outside-district\",\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Verifies the outside-district delivery charge (100 BDT) is applied."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Delivery charge is 100', () => {",
+                  "  pm.expect(pm.response.json().data.deliveryCharge).to.equal(100);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create order — missing required fields",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Sends an incomplete payload — expects a 422 validation error."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error message present', () => {",
+                  "  pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create order — invalid phone number",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"phone\": \"12345\",\n  \"address\": \"Some address\",\n  \"deliveryZone\": \"inside-dhaka\",\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Phone doesn't match 01[3-9]XXXXXXXX — expects 422 with phone validation message."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error references phone', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('phone');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create order — invalid delivery zone",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"phone\": \"01712345678\",\n  \"address\": \"Some address\",\n  \"deliveryZone\": \"moon-base\",\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Unknown delivery zone — expects 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error references deliveryZone', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('deliveryZone');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create order — product not found",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"phone\": \"01712345678\",\n  \"address\": \"Some address\",\n  \"deliveryZone\": \"inside-dhaka\",\n  \"productId\": \"ghost-product\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Valid payload but productId doesn't exist in DB — expects 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error references product', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('Product not found');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create order — invalid JSON body",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "this is not json",
+              "options": { "raw": { "language": "text" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Malformed body — expects 400."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error about invalid JSON', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('Invalid JSON');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Products",
+      "description": "Key-gated endpoint for uploading products.\nRequires Authorization: Bearer {{adminApiKey}}",
+      "item": [
+        {
+          "name": "POST upload product — valid (full payload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"rose-face-serum\",\n  \"name\": \"Rose Face Serum\",\n  \"description\": \"A lightweight serum packed with rose extract for deep hydration.\",\n  \"tagline\": \"Glow from within\",\n  \"price\": 499,\n  \"originalPrice\": 699,\n  \"discount\": 28,\n  \"image\": \"/images/rose-face-serum.jpg\",\n  \"badge\": \"Best Seller\",\n  \"category\": \"serums\",\n  \"defaultQty\": 1,\n  \"sizes\": [\"30ml\", \"50ml\"],\n  \"details\": \"Enriched with natural rose extracts and hyaluronic acid.\",\n  \"howToUse\": \"Apply 2-3 drops on clean skin before moisturiser.\",\n  \"ingredients\": \"Rosa Damascena, Hyaluronic Acid, Niacinamide\",\n  \"deliveryInfo\": \"Delivered within 3-5 business days.\",\n  \"sortOrder\": 1,\n  \"isActive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"]
+            },
+            "description": "Creates a product with all optional fields filled in."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const status = pm.response.code;",
+                  "pm.test('Status is 201 or 409 (conflict if already exists)', () => {",
+                  "  pm.expect([201, 409]).to.include(status);",
+                  "});",
+                  "if (status === 201) {",
+                  "  pm.test('Returned product has id and price', () => {",
+                  "    const d = pm.response.json().data;",
+                  "    pm.expect(d.id).to.equal('rose-face-serum');",
+                  "    pm.expect(d.price).to.equal(499);",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST upload product — minimal required fields only",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"minimal-product\",\n  \"name\": \"Minimal Product\",\n  \"description\": \"Just the required fields.\",\n  \"price\": 150,\n  \"image\": \"/images/minimal.jpg\",\n  \"category\": \"moisturizers\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"]
+            },
+            "description": "Only required fields — optional fields should default gracefully."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201 or 409', () => {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST upload product — duplicate ID (409 conflict)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"rose-face-serum\",\n  \"name\": \"Duplicate Product\",\n  \"description\": \"This ID already exists.\",\n  \"price\": 299,\n  \"image\": \"/images/dup.jpg\",\n  \"category\": \"serums\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"]
+            },
+            "description": "Sending the same ID twice — second request must return 409."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Error mentions already exists', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('already exists');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST upload product — missing required fields (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No ID or price product\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"]
+            },
+            "description": "Missing id, price, image, description, category — expects 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error message present', () => {",
+                  "  pm.expect(pm.response.json()).to.have.property('error');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST upload product — no auth header (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"test-no-auth\",\n  \"name\": \"No Auth\",\n  \"description\": \"Should be rejected.\",\n  \"price\": 100,\n  \"image\": \"/img/x.jpg\",\n  \"category\": \"serums\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"]
+            },
+            "description": "No Authorization header — must return 401."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Unauthorized error message', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('Unauthorized');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST upload product — wrong API key (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer this-is-the-wrong-key" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"test-wrong-key\",\n  \"name\": \"Wrong Key\",\n  \"description\": \"Should be rejected.\",\n  \"price\": 100,\n  \"image\": \"/img/x.jpg\",\n  \"category\": \"serums\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"]
+            },
+            "description": "Wrong API key — must return 401."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Orders",
+      "description": "Key-gated endpoint for fetching all orders.\nRequires Authorization: Bearer {{adminApiKey}}",
+      "item": [
+        {
+          "name": "GET all orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders"]
+            },
+            "description": "Returns first page of all orders (default pageSize 50), newest first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Body has pagination fields', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.property('orders');",
+                  "  pm.expect(d).to.have.property('total');",
+                  "  pm.expect(d).to.have.property('page');",
+                  "  pm.expect(d).to.have.property('pageSize');",
+                  "  pm.expect(d.orders).to.be.an('array');",
+                  "  pm.expect(d.page).to.equal(1);",
+                  "  pm.expect(d.pageSize).to.equal(50);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET all orders — filtered by status (pending)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders?status=pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders"],
+              "query": [{ "key": "status", "value": "pending" }]
+            },
+            "description": "Returns only pending orders."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All returned orders are pending', () => {",
+                  "  pm.response.json().data.orders.forEach(o => {",
+                  "    pm.expect(o.status).to.equal('pending');",
+                  "  });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET all orders — paginated (page 1, pageSize 5)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders?page=1&pageSize=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders"],
+              "query": [
+                { "key": "page",     "value": "1" },
+                { "key": "pageSize", "value": "5" }
+              ]
+            },
+            "description": "Returns at most 5 orders on page 1."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('pageSize echoed as 5', () => {",
+                  "  pm.expect(pm.response.json().data.pageSize).to.equal(5);",
+                  "});",
+                  "pm.test('orders array length <= 5', () => {",
+                  "  pm.expect(pm.response.json().data.orders.length).to.be.at.most(5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET all orders — invalid status (400)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders?status=flying",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders"],
+              "query": [{ "key": "status", "value": "flying" }]
+            },
+            "description": "Unknown status value — expects 400."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error references status', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('status');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET all orders — no auth header (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders"]
+            },
+            "description": "No Authorization header — must return 401."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Unauthorized error message', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('Unauthorized');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET all orders — wrong API key (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer totally-wrong-key" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders"]
+            },
+            "description": "Wrong API key — must return 401."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
