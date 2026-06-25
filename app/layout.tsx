@@ -18,7 +18,7 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'Boty — Natural Skincare',
+  title: 'Celestial Hub',
   description: 'Premium natural skincare and body care products. Glow gently with Boty.',
   generator: 'v0.app',
   keywords: ['skincare', 'natural', 'organic', 'beauty', 'body care', 'cruelty-free'],
