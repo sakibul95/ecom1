@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 import { Minus, Plus, CheckCircle2 } from "lucide-react"
@@ -17,9 +17,28 @@ const deliveryOptions: DeliveryOption[] = [
   { id: "outside-district",label: "ঢাকা জেলার বাইরে", charge: 100 },
 ]
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Default export — wraps the page in Suspense ─────────────────────────────
+// Required because useSearchParams() opts out of static prerendering.
 
 export default function BuyNowPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen">
+        <Header />
+        <div className="pt-28 pb-20 flex items-center justify-center">
+          <p className="text-muted-foreground animate-pulse">Loading…</p>
+        </div>
+        <Footer />
+      </main>
+    }>
+      <BuyNowContent />
+    </Suspense>
+  )
+}
+
+// ─── Inner component — allowed to call useSearchParams() ─────────────────────
+
+function BuyNowContent() {
   const searchParams = useSearchParams()
 
   // ── Product list fetched from API ─────────────────────────────────────────
